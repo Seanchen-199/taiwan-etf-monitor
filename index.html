@@ -407,6 +407,9 @@ input[type=range]::-moz-range-thumb {
     </div>
   </div>
 
+  <!-- 即時資料看板 -->
+  <div id="auto-panel" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1.25rem;display:none;"></div>
+
   <!-- Tabs -->
   <div class="tab-row">
     <button class="tab active" onclick="switchTab('overview',this)">總覽</button>
@@ -744,11 +747,78 @@ function updateClock() {
   dot.className = 'live-dot' + (isWeekday && isMarketHour ? ' active' : '');
 }
 
+// ── 自動資料載入 ──────────────────────────────────────────
+let autoData = null;
+
+async function loadAutoData() {
+  try {
+    const resp = await fetch('data.json?t=' + Date.now());
+    if (!resp.ok) throw new Error('尚無 data.json');
+    autoData = await resp.json();
+
+    // 把自動抓取的分數填入 state
+    if (autoData.auto_scores) {
+      Object.entries(autoData.auto_scores).forEach(([k, v]) => {
+        state[k] = v;
+      });
+    }
+
+    // 更新頂部資訊列
+    if (autoData.updated_at) {
+      document.getElementById('update-time').textContent = '資料更新：' + autoData.updated_at;
+      document.getElementById('live-dot').className = 'live-dot active';
+    }
+
+    // 渲染自動資料看板
+    renderAutoPanel();
+    recalc();
+    renderSliders(); // 重新渲染讓滑桿反映新值
+
+    console.log('[ETF Monitor] 自動資料載入成功，更新', autoData.auto_score_count, '個指標');
+  } catch (e) {
+    console.log('[ETF Monitor] data.json 未找到，使用手動模式：', e.message);
+    document.getElementById('auto-panel').style.display = 'none';
+    updateClock();
+    setInterval(updateClock, 1000);
+  }
+}
+
+function renderAutoPanel() {
+  if (!autoData) return;
+  const panel = document.getElementById('auto-panel');
+  panel.style.display = '';
+
+  const items = [
+    { label: '0050',    val: autoData.etf_0050_price   ? `NT$ ${autoData.etf_0050_price}（${autoData.etf_0050_change > 0 ? '+' : ''}${autoData.etf_0050_change}%）` : '--', color: autoData.etf_0050_change > 0 ? 'var(--bull)' : autoData.etf_0050_change < 0 ? 'var(--bear)' : 'var(--text2)' },
+    { label: '006208',  val: autoData.etf_006208_price  ? `NT$ ${autoData.etf_006208_price}（${autoData.etf_006208_change > 0 ? '+' : ''}${autoData.etf_006208_change}%）` : '--', color: autoData.etf_006208_change > 0 ? 'var(--bull)' : autoData.etf_006208_change < 0 ? 'var(--bear)' : 'var(--text2)' },
+    { label: '台幣匯率', val: autoData.usd_twd ? `USD/TWD ${autoData.usd_twd}（${autoData.twd_trend || '--'}）` : '--', color: autoData.twd_trend === '升值' ? 'var(--bull)' : 'var(--bear)' },
+    { label: 'VIX',     val: autoData.vix      ? `${autoData.vix}（${autoData.vix_status || ''}）` : '--', color: autoData.vix < 20 ? 'var(--bull)' : autoData.vix > 30 ? 'var(--bear)' : 'var(--caution)' },
+    { label: '費半 SOX', val: autoData.sox      ? `${autoData.sox.toLocaleString()}（${autoData.sox_change > 0 ? '+' : ''}${autoData.sox_change}%）` : '--', color: autoData.sox_change > 0 ? 'var(--bull)' : 'var(--bear)' },
+    { label: '那斯達克', val: autoData.nasdaq   ? `${autoData.nasdaq.toLocaleString()}（${autoData.nasdaq_change > 0 ? '+' : ''}${autoData.nasdaq_change}%）` : '--', color: autoData.nasdaq_change > 0 ? 'var(--bull)' : 'var(--bear)' },
+    { label: '加權指數', val: autoData.twii     ? `${autoData.twii.toLocaleString()}（${autoData.twii_change > 0 ? '+' : ''}${autoData.twii_change}%）` : '--', color: autoData.twii_change > 0 ? 'var(--bull)' : 'var(--bear)' },
+    { label: '外資買賣超', val: autoData.foreign_net_buy != null ? `${(autoData.foreign_net_buy / 100000).toFixed(1)} 億元` : '--', color: autoData.foreign_net_buy > 0 ? 'var(--bull)' : 'var(--bear)' },
+    { label: '投信買賣超', val: autoData.invest_net_buy  != null ? `${(autoData.invest_net_buy  / 100000).toFixed(1)} 億元` : '--', color: autoData.invest_net_buy  > 0 ? 'var(--bull)' : 'var(--bear)' },
+    { label: '外資期貨淨多單', val: autoData.futures_foreign_net != null ? `${autoData.futures_foreign_net.toLocaleString()} 口` : '--', color: autoData.futures_foreign_net > 0 ? 'var(--bull)' : 'var(--bear)' },
+  ];
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--text3)">即時資料看板</div>
+      <div style="font-size:11px;color:var(--text3)">自動更新 ${autoData.auto_score_count || 0} 個指標・資料日期：${autoData.updated_at || '--'}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
+      ${items.map(item => `
+        <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;color:var(--text3)">${item.label}</span>
+          <span style="font-size:12px;font-weight:600;font-family:var(--mono);color:${item.color}">${item.val}</span>
+        </div>`).join('')}
+    </div>`;
+}
+
 renderHero();
 renderCats();
 renderSliders();
-setInterval(updateClock, 1000);
-updateClock();
+loadAutoData();
 </script>
 </body>
 </html>
