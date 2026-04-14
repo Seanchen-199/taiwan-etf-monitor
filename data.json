@@ -1,0 +1,23 @@
+{
+  "updated_at": "2026/04/14 09:12",
+  "updated_ts": 1776157953,
+  "source": {
+    "yahoo": "Yahoo Finance",
+    "twse": "台灣證交所",
+    "taifex": "台灣期交所"
+  },
+  "date_institutional": "2026/04/14",
+  "foreign_net_buy": -9853200,
+  "invest_net_buy": 0,
+  "dealer_net_buy": -600000,
+  "total_3_net_buy": 650000,
+  "score_foreign": 2.5,
+  "score_invest": 5.0,
+  "score_futures": 5,
+  "auto_scores": {
+    "s2": 2.5,
+    "s3": 5.0,
+    "s5": 5
+  },
+  "auto_score_count": 3
+}
