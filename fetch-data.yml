@@ -2,16 +2,13 @@ name: 每日自動抓取台股資料
 
 on:
   schedule:
-    # 每天台灣時間 15:30 執行（UTC 07:30，收盤後）
-    - cron: '30 7 * * 1-5'
-    # 每天台灣時間 09:00 執行（UTC 01:00，開盤前預熱）
-    - cron: '0 1 * * 1-5'
-  workflow_dispatch:  # 允許手動觸發
+    - cron: '30 7 * * 1-5'   # 台灣時間 15:30 收盤後
+    - cron: '0 1 * * 1-5'    # 台灣時間 09:00 開盤前
+  workflow_dispatch:
 
 jobs:
-  fetch-data:
+  fetch-and-model:
     runs-on: ubuntu-latest
-
     steps:
       - name: 取出程式碼
         uses: actions/checkout@v4
@@ -21,15 +18,18 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: 執行資料抓取腳本
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      - name: 步驟1：抓取原始資料
         run: python fetch_data.py
 
-      - name: 提交並推送 data.json
+      - name: 步驟2：執行多因子模型
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: python model.py
+
+      - name: 提交並推送結果
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Actions Bot"
-          git add data.json
-          git diff --staged --quiet || git commit -m "📊 自動更新：$(date '+%Y/%m/%d %H:%M') 台灣時間"
+          git add raw_data.json model_output.json
+          git diff --staged --quiet || git commit -m "📊 模型更新：$(date '+%Y/%m/%d %H:%M') 台灣時間"
           git push
